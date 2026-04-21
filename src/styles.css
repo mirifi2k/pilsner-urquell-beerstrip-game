@@ -29,7 +29,7 @@ canvas {
 .hud {
   position: absolute;
   right: calc(25.52% + 16px);
-  top: 16px;
+  top: max(12px, env(safe-area-inset-top, 0px));
   display: flex;
   gap: 10px;
   align-items: center;
@@ -51,18 +51,32 @@ canvas {
   cursor: pointer;
 }
 
-@media (max-width: 768px) {
+@media (orientation: portrait) {
   .hud {
     left: 50%;
     right: auto;
+    top: auto;
+    bottom: max(12px, env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
-    top: 8px;
     font-size: 14px;
-    padding: 8px 12px;
+    padding: 10px 14px;
   }
 
   .hud button {
-    padding: 10px 16px;
-    font-size: 14px;
+    padding: 12px 18px;
+    font-size: 15px;
+    min-height: 44px;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 900px) {
+  .hud {
+    right: 12px;
+    top: max(8px, env(safe-area-inset-top, 0px));
+  }
+
+  .hud button {
+    padding: 8px 14px;
+    min-height: 40px;
   }
 }

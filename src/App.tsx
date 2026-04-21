@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { GAMEPLAY_WIDTH, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "./game/constants";
+import {
+  clientToLogicalPickLandscape,
+  clientToLogicalPlay,
+  hitTestPortraitPickCard,
+  isPortraitScreen,
+} from "./game/layout";
 import {
   createInitialState,
+  pickGirl,
   pickGirlFromPointer,
   resetGame,
   setPickHoverFromPointer,
+  setPickHoverGirl,
   setCrateFromPointerX,
   tick,
 } from "./game/engine";
@@ -38,44 +45,25 @@ const App = () => {
     };
 
     const onResize = () => resizeCanvas(canvas);
-    const getLogicalPoint = (clientX: number, clientY: number) => {
-      const rect = canvas.getBoundingClientRect();
-      if (!rect.width || !rect.height) return null;
-      const logicalAspect = LOGICAL_WIDTH / LOGICAL_HEIGHT;
-      const rectAspect = rect.width / rect.height || logicalAspect;
-
-      let renderWidth = rect.width;
-      let renderHeight = rect.height;
-      let offsetX = 0;
-      let offsetY = 0;
-
-      if (rectAspect > logicalAspect) {
-        renderHeight = rect.height;
-        renderWidth = renderHeight * logicalAspect;
-        offsetX = (rect.width - renderWidth) / 2;
-      } else {
-        renderWidth = rect.width;
-        renderHeight = renderWidth / logicalAspect;
-        offsetY = (rect.height - renderHeight) / 2;
-      }
-
-      const xInRender = clientX - rect.left - offsetX;
-      const yInRender = clientY - rect.top - offsetY;
-      if (xInRender < 0 || yInRender < 0 || xInRender > renderWidth || yInRender > renderHeight) {
-        return null;
-      }
-
-      const normalizedX = xInRender / renderWidth;
-      const normalizedY = yInRender / renderHeight;
-      const logicalX = normalizedX * LOGICAL_WIDTH;
-      const logicalY = normalizedY * LOGICAL_HEIGHT;
-      const gameplayX = Math.max(0, Math.min(GAMEPLAY_WIDTH, logicalX));
-      return { gameplayX, logicalY, logicalX };
+    const getPixelSize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      return { pw: canvas.width / dpr, ph: canvas.height / dpr };
     };
     const moveFromClientX = (clientX: number, clientY: number) => {
-      const point = getLogicalPoint(clientX, clientY);
-      if (!point) return;
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const { pw, ph } = getPixelSize();
       if (stateRef.current.phase !== "play") {
+        if (isPortraitScreen(pw, ph)) {
+          const card = hitTestPortraitPickCard(clientX, clientY, rect, pw, ph);
+          stateRef.current = setPickHoverGirl(stateRef.current, card);
+          return;
+        }
+        const point = clientToLogicalPickLandscape(clientX, clientY, rect, pw, ph);
+        if (!point) {
+          stateRef.current = setPickHoverGirl(stateRef.current, null);
+          return;
+        }
         stateRef.current = setPickHoverFromPointer(
           stateRef.current,
           point.logicalX,
@@ -83,10 +71,26 @@ const App = () => {
         );
         return;
       }
+      const point = clientToLogicalPlay(clientX, clientY, rect, pw, ph);
+      if (!point) return;
       stateRef.current = setCrateFromPointerX(stateRef.current, point.gameplayX);
     };
     const pickFromClient = (clientX: number, clientY: number) => {
-      const point = getLogicalPoint(clientX, clientY);
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const { pw, ph } = getPixelSize();
+      if (isPortraitScreen(pw, ph)) {
+        const card = hitTestPortraitPickCard(clientX, clientY, rect, pw, ph);
+        if (card === 1) {
+          stateRef.current = pickGirl(stateRef.current, 1);
+        }
+        if (stateRef.current.phase !== phaseRef.current) {
+          phaseRef.current = stateRef.current.phase;
+          setPhase(stateRef.current.phase);
+        }
+        return;
+      }
+      const point = clientToLogicalPickLandscape(clientX, clientY, rect, pw, ph);
       if (!point) return;
       stateRef.current = pickGirlFromPointer(
         stateRef.current,

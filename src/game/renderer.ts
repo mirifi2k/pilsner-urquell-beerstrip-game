@@ -6,13 +6,18 @@ import {
   GAMEPLAY_WIDTH,
   LOGICAL_HEIGHT,
   LOGICAL_WIDTH,
-  OUTFIT_STAGES,
   PICK_CARD_GAP,
   PICK_CARD_HEIGHT,
   PICK_CARD_TOP,
   PICK_CARD_WIDTH,
   STAGE_PANEL_WIDTH,
 } from "./constants";
+import {
+  computeLandscapeLayout,
+  computePortraitPickLayout,
+  computePortraitPlayLayout,
+  isPortraitScreen,
+} from "./layout";
 import type { GameState } from "./types";
 
 const baseUrl = import.meta.env.BASE_URL;
@@ -54,160 +59,208 @@ const getGirlStageImage = (
   return getImage(src);
 };
 
-export const setupCanvas = (
-  canvas: HTMLCanvasElement,
-): CanvasRenderingContext2D => {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("2D context missing");
-  return ctx;
-};
-
-export const resizeCanvas = (canvas: HTMLCanvasElement): void => {
-  const dpr = window.devicePixelRatio || 1;
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  canvas.width = Math.floor(w * dpr);
-  canvas.height = Math.floor(h * dpr);
-  canvas.style.width = `${w}px`;
-  canvas.style.height = `${h}px`;
-};
-
-export const draw = (
-  ctx: CanvasRenderingContext2D,
-  canvas: HTMLCanvasElement,
-  state: GameState,
-): void => {
-  const dpr = window.devicePixelRatio || 1;
-  const pixelWidth = canvas.width / dpr;
-  const pixelHeight = canvas.height / dpr;
-
-  const targetAspect = LOGICAL_WIDTH / LOGICAL_HEIGHT;
-  const currentAspect = pixelWidth / pixelHeight || targetAspect;
-
-  let renderWidth = pixelWidth;
-  let renderHeight = pixelHeight;
-
-  if (currentAspect > targetAspect) {
-    renderHeight = pixelHeight;
-    renderWidth = renderHeight * targetAspect;
-  } else {
-    renderWidth = pixelWidth;
-    renderHeight = renderWidth / targetAspect;
-  }
-
-  const offsetX = (pixelWidth - renderWidth) / 2;
-  const offsetY = (pixelHeight - renderHeight) / 2;
-  const scale = renderWidth / LOGICAL_WIDTH;
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, pixelWidth, pixelHeight);
-
-  ctx.fillStyle = "#051a11";
-  ctx.fillRect(0, 0, pixelWidth, pixelHeight);
-
-  ctx.translate(offsetX, offsetY);
-  ctx.scale(scale, scale);
-
+const paintPickLogical = (ctx: CanvasRenderingContext2D, state: GameState): void => {
   const bgImage = getImage(assets.bg);
-  const bgStageImage = getImage(assets.bgStage);
   const girl1Image = getImage(assets.girl1);
   const girl2Image = getImage(assets.girl2);
   const girl3Image = getImage(assets.girl3);
+
+  if (bgImage.complete && bgImage.naturalWidth > 0) {
+    ctx.drawImage(bgImage, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+  }
+  ctx.fillStyle = "#cdb84a";
+  ctx.textAlign = "center";
+  ctx.font = "700 110px Inter, Arial, sans-serif";
+  ctx.fillText("Pick Your Girl", LOGICAL_WIDTH / 2, 210);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "600 52px Inter, Arial, sans-serif";
+  ctx.fillText("Tap or click one card to start", LOGICAL_WIDTH / 2, 290);
+
+  const cardTop = PICK_CARD_TOP;
+  const cardWidth = PICK_CARD_WIDTH;
+  const cardHeight = PICK_CARD_HEIGHT;
+  const gap = PICK_CARD_GAP;
+  const totalWidth = cardWidth * 3 + gap * 2;
+  const startX = (LOGICAL_WIDTH - totalWidth) / 2;
+  const girls = [girl1Image, girl2Image, girl3Image];
+  for (let i = 0; i < girls.length; i += 1) {
+    const x = startX + i * (cardWidth + gap);
+    const img = girls[i];
+    const isAvailable = i === 0;
+    const isHovered = state.hoveredGirl === i + 1;
+    const lift = isHovered ? 34 : 0;
+    const drawY = cardTop - lift;
+    const shadowAlpha = isHovered ? 0.42 : 0.22;
+    ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+    ctx.beginPath();
+    ctx.roundRect(x + 14, drawY + 22, cardWidth, cardHeight, 28);
+    ctx.fill();
+    if (isAvailable && img.complete && img.naturalWidth > 0) {
+      const fitScale = Math.min(
+        cardWidth / img.naturalWidth,
+        cardHeight / img.naturalHeight,
+      );
+      const drawW = img.naturalWidth * fitScale;
+      const drawH = img.naturalHeight * fitScale;
+      const drawX = x + (cardWidth - drawW) / 2;
+      const drawImageY = drawY + (cardHeight - drawH) / 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(x, drawY, cardWidth, cardHeight, 28);
+      ctx.clip();
+      ctx.drawImage(img, drawX, drawImageY, drawW, drawH);
+      ctx.restore();
+    } else if (!isAvailable) {
+      const lockGradient = ctx.createLinearGradient(
+        0,
+        drawY,
+        0,
+        drawY + cardHeight,
+      );
+      lockGradient.addColorStop(0, "rgba(20, 20, 26, 0.9)");
+      lockGradient.addColorStop(1, "rgba(8, 8, 12, 0.92)");
+      ctx.fillStyle = lockGradient;
+      ctx.beginPath();
+      ctx.roundRect(x, drawY, cardWidth, cardHeight, 28);
+      ctx.fill();
+      ctx.fillStyle = "rgba(205, 184, 74, 0.95)";
+      ctx.textAlign = "center";
+      ctx.font = "700 88px Inter, Arial, sans-serif";
+      ctx.fillText("LOCKED", x + cardWidth / 2, drawY + cardHeight / 2 - 24);
+      ctx.font = "600 44px Inter, Arial, sans-serif";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.fillText(
+        "Coming soon",
+        x + cardWidth / 2,
+        drawY + cardHeight / 2 + 56,
+      );
+    }
+    ctx.strokeStyle = isAvailable ? "#cdb84a" : "rgba(150, 150, 160, 0.8)";
+    ctx.lineWidth = isHovered ? 10 : 6;
+    ctx.beginPath();
+    ctx.roundRect(x, drawY, cardWidth, cardHeight, 28);
+    ctx.stroke();
+    ctx.fillStyle = isAvailable ? "#ffffff" : "rgba(220, 220, 220, 0.85)";
+    ctx.font = "700 58px Inter, Arial, sans-serif";
+    ctx.fillText(
+      isAvailable ? `Girl ${i + 1}` : `Girl ${i + 1} (Locked)`,
+      x + cardWidth / 2,
+      drawY + cardHeight + 72,
+    );
+  }
+};
+
+const paintPortraitPick = (
+  ctx: CanvasRenderingContext2D,
+  pixelWidth: number,
+  pixelHeight: number,
+  state: GameState,
+): void => {
+  const layout = computePortraitPickLayout(pixelWidth, pixelHeight);
+  const bgImage = getImage(assets.bg);
+  if (bgImage.complete && bgImage.naturalWidth > 0) {
+    const cover = Math.max(
+      pixelWidth / bgImage.naturalWidth,
+      pixelHeight / bgImage.naturalHeight,
+    );
+    const dw = bgImage.naturalWidth * cover;
+    const dh = bgImage.naturalHeight * cover;
+    const ox = (pixelWidth - dw) / 2;
+    const oy = (pixelHeight - dh) / 2;
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    ctx.drawImage(bgImage, ox, oy, dw, dh);
+    ctx.restore();
+  } else {
+    const g = ctx.createLinearGradient(0, 0, 0, pixelHeight);
+    g.addColorStop(0, "#0a2418");
+    g.addColorStop(1, "#020d08");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, pixelWidth, pixelHeight);
+  }
+
+  const titleSize = Math.min(32, pixelWidth * 0.085);
+  const subSize = Math.min(16, pixelWidth * 0.04);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#cdb84a";
+  ctx.font = `700 ${titleSize}px Inter, Arial, sans-serif`;
+  ctx.fillText(
+    "Pick Your Girl",
+    pixelWidth / 2,
+    (layout.headerTop + layout.headerBottom) / 2 + titleSize * 0.35,
+  );
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `600 ${subSize}px Inter, Arial, sans-serif`;
+  ctx.fillText("Tap a card to start", pixelWidth / 2, layout.headerBottom - 6);
+
+  const girls = [getImage(assets.girl1), getImage(assets.girl2), getImage(assets.girl3)];
+  for (let i = 0; i < 3; i += 1) {
+    const r = layout.cards[i];
+    const img = girls[i];
+    const isAvailable = i === 0;
+    const isHovered = state.hoveredGirl === (i + 1) as 1 | 2 | 3;
+    const lift = isHovered ? Math.min(10, r.h * 0.04) : 0;
+    const drawY = r.y - lift;
+    const rad = Math.min(28, r.w * 0.06, r.h * 0.08);
+    const shadowAlpha = isHovered ? 0.42 : 0.22;
+    ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+    ctx.beginPath();
+    ctx.roundRect(r.x + 6, drawY + 8, r.w, r.h, rad);
+    ctx.fill();
+
+    if (isAvailable && img.complete && img.naturalWidth > 0) {
+      const fitScale = Math.min(r.w / img.naturalWidth, r.h / img.naturalHeight);
+      const drawW = img.naturalWidth * fitScale;
+      const drawH = img.naturalHeight * fitScale;
+      const drawX = r.x + (r.w - drawW) / 2;
+      const drawImageY = drawY + (r.h - drawH) / 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(r.x, drawY, r.w, r.h, rad);
+      ctx.clip();
+      ctx.drawImage(img, drawX, drawImageY, drawW, drawH);
+      ctx.restore();
+    } else if (!isAvailable) {
+      const lockGradient = ctx.createLinearGradient(0, drawY, 0, drawY + r.h);
+      lockGradient.addColorStop(0, "rgba(20, 20, 26, 0.9)");
+      lockGradient.addColorStop(1, "rgba(8, 8, 12, 0.92)");
+      ctx.fillStyle = lockGradient;
+      ctx.beginPath();
+      ctx.roundRect(r.x, drawY, r.w, r.h, rad);
+      ctx.fill();
+      const lockFont = Math.min(36, r.h * 0.22);
+      ctx.fillStyle = "rgba(205, 184, 74, 0.95)";
+      ctx.textAlign = "center";
+      ctx.font = `700 ${lockFont}px Inter, Arial, sans-serif`;
+      ctx.fillText("LOCKED", r.x + r.w / 2, drawY + r.h / 2 - lockFont * 0.2);
+      ctx.font = `600 ${lockFont * 0.5}px Inter, Arial, sans-serif`;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.fillText("Coming soon", r.x + r.w / 2, drawY + r.h / 2 + lockFont * 0.55);
+    }
+
+    ctx.strokeStyle = isAvailable ? "#cdb84a" : "rgba(150, 150, 160, 0.8)";
+    ctx.lineWidth = isHovered ? Math.max(3, r.w * 0.018) : Math.max(2, r.w * 0.012);
+    ctx.beginPath();
+    ctx.roundRect(r.x, drawY, r.w, r.h, rad);
+    ctx.stroke();
+
+    const label = isAvailable ? `Girl ${i + 1}` : `Girl ${i + 1} (Locked)`;
+    const labelSize = Math.min(22, r.w * 0.065, r.h * 0.14);
+    ctx.fillStyle = isAvailable ? "#ffffff" : "rgba(220, 220, 220, 0.9)";
+    ctx.font = `700 ${labelSize}px Inter, Arial, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillText(label, r.x + r.w / 2, drawY + r.h - Math.max(10, labelSize * 0.9));
+  }
+};
+
+const paintGameplayStrip = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  const bgImage = getImage(assets.bg);
   const beerImage = getImage(assets.beer);
   const crateImage = getImage(assets.crate);
   const capImage = getImage(assets.cap);
 
-  const stagePanelW = STAGE_PANEL_WIDTH;
   const gameAreaW = GAMEPLAY_WIDTH;
   const hudY = 122;
-
-  if (state.phase === "pick") {
-    if (bgImage.complete && bgImage.naturalWidth > 0) {
-      ctx.drawImage(bgImage, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-    }
-    ctx.fillStyle = "#cdb84a";
-    ctx.textAlign = "center";
-    ctx.font = "700 110px Inter, Arial, sans-serif";
-    ctx.fillText("Pick Your Girl", LOGICAL_WIDTH / 2, 210);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "600 52px Inter, Arial, sans-serif";
-    ctx.fillText("Tap or click one card to start", LOGICAL_WIDTH / 2, 290);
-
-    const cardTop = PICK_CARD_TOP;
-    const cardWidth = PICK_CARD_WIDTH;
-    const cardHeight = PICK_CARD_HEIGHT;
-    const gap = PICK_CARD_GAP;
-    const totalWidth = cardWidth * 3 + gap * 2;
-    const startX = (LOGICAL_WIDTH - totalWidth) / 2;
-    const girls = [girl1Image, girl2Image, girl3Image];
-    for (let i = 0; i < girls.length; i += 1) {
-      const x = startX + i * (cardWidth + gap);
-      const img = girls[i];
-      const isAvailable = i === 0;
-      const isHovered = state.hoveredGirl === i + 1;
-      const lift = isHovered ? 34 : 0;
-      const drawY = cardTop - lift;
-      const shadowAlpha = isHovered ? 0.42 : 0.22;
-      ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
-      ctx.beginPath();
-      ctx.roundRect(x + 14, drawY + 22, cardWidth, cardHeight, 28);
-      ctx.fill();
-      if (isAvailable && img.complete && img.naturalWidth > 0) {
-        const fitScale = Math.min(
-          cardWidth / img.naturalWidth,
-          cardHeight / img.naturalHeight,
-        );
-        const drawW = img.naturalWidth * fitScale;
-        const drawH = img.naturalHeight * fitScale;
-        const drawX = x + (cardWidth - drawW) / 2;
-        const drawImageY = drawY + (cardHeight - drawH) / 2;
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(x, drawY, cardWidth, cardHeight, 28);
-        ctx.clip();
-        ctx.drawImage(img, drawX, drawImageY, drawW, drawH);
-        ctx.restore();
-      } else if (!isAvailable) {
-        const lockGradient = ctx.createLinearGradient(
-          0,
-          drawY,
-          0,
-          drawY + cardHeight,
-        );
-        lockGradient.addColorStop(0, "rgba(20, 20, 26, 0.9)");
-        lockGradient.addColorStop(1, "rgba(8, 8, 12, 0.92)");
-        ctx.fillStyle = lockGradient;
-        ctx.beginPath();
-        ctx.roundRect(x, drawY, cardWidth, cardHeight, 28);
-        ctx.fill();
-        ctx.fillStyle = "rgba(205, 184, 74, 0.95)";
-        ctx.textAlign = "center";
-        ctx.font = "700 88px Inter, Arial, sans-serif";
-        ctx.fillText("LOCKED", x + cardWidth / 2, drawY + cardHeight / 2 - 24);
-        ctx.font = "600 44px Inter, Arial, sans-serif";
-        ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-        ctx.fillText(
-          "Coming soon",
-          x + cardWidth / 2,
-          drawY + cardHeight / 2 + 56,
-        );
-      }
-      ctx.strokeStyle = isAvailable ? "#cdb84a" : "rgba(150, 150, 160, 0.8)";
-      ctx.lineWidth = isHovered ? 10 : 6;
-      ctx.beginPath();
-      ctx.roundRect(x, drawY, cardWidth, cardHeight, 28);
-      ctx.stroke();
-      ctx.fillStyle = isAvailable ? "#ffffff" : "rgba(220, 220, 220, 0.85)";
-      ctx.font = "700 58px Inter, Arial, sans-serif";
-      ctx.fillText(
-        isAvailable ? `Girl ${i + 1}` : `Girl ${i + 1} (Locked)`,
-        x + cardWidth / 2,
-        drawY + cardHeight + 72,
-      );
-    }
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    return;
-  }
 
   const sky = ctx.createLinearGradient(0, 0, 0, LOGICAL_HEIGHT);
   sky.addColorStop(0, "#12293f");
@@ -324,6 +377,24 @@ export const draw = (
     }
   }
 
+  if (state.isGameOver) {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.fillRect(0, 0, gameAreaW, LOGICAL_HEIGHT);
+    ctx.fillStyle = "#ffdd77";
+    ctx.textAlign = "center";
+    ctx.font = "700 120px Inter, Arial, sans-serif";
+    ctx.fillText("GAME OVER", gameAreaW / 2, LOGICAL_HEIGHT / 2 - 40);
+    ctx.font = "700 64px Inter, Arial, sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("Use Restart button", gameAreaW / 2, LOGICAL_HEIGHT / 2 + 90);
+  }
+};
+
+const paintStageStrip = (ctx: CanvasRenderingContext2D, state: GameState): void => {
+  const bgStageImage = getImage(assets.bgStage);
+  const stagePanelW = STAGE_PANEL_WIDTH;
+  const gameAreaW = GAMEPLAY_WIDTH;
+
   if (bgStageImage.complete && bgStageImage.naturalWidth > 0) {
     const srcAspect = bgStageImage.naturalWidth / bgStageImage.naturalHeight;
     const dstAspect = stagePanelW / LOGICAL_HEIGHT;
@@ -429,18 +500,91 @@ export const draw = (
       girlRectY + girlRectH / 2,
     );
   }
+};
 
-  if (state.isGameOver) {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
-    ctx.fillRect(0, 0, gameAreaW, LOGICAL_HEIGHT);
-    ctx.fillStyle = "#ffdd77";
-    ctx.textAlign = "center";
-    ctx.font = "700 120px Inter, Arial, sans-serif";
-    ctx.fillText("GAME OVER", gameAreaW / 2, LOGICAL_HEIGHT / 2 - 40);
-    ctx.font = "700 64px Inter, Arial, sans-serif";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText("Use Restart button", gameAreaW / 2, LOGICAL_HEIGHT / 2 + 90);
+export const setupCanvas = (
+  canvas: HTMLCanvasElement,
+): CanvasRenderingContext2D => {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("2D context missing");
+  return ctx;
+};
+
+export const resizeCanvas = (canvas: HTMLCanvasElement): void => {
+  const dpr = window.devicePixelRatio || 1;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+};
+
+export const draw = (
+  ctx: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  state: GameState,
+): void => {
+  const dpr = window.devicePixelRatio || 1;
+  const pixelWidth = canvas.width / dpr;
+  const pixelHeight = canvas.height / dpr;
+
+  if (state.phase === "pick") {
+    if (isPortraitScreen(pixelWidth, pixelHeight)) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+      paintPortraitPick(ctx, pixelWidth, pixelHeight, state);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      return;
+    }
+    const layout = computeLandscapeLayout(pixelWidth, pixelHeight);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+    ctx.fillStyle = "#051a11";
+    ctx.fillRect(0, 0, pixelWidth, pixelHeight);
+    ctx.translate(layout.offsetX, layout.offsetY);
+    ctx.scale(layout.renderWidth / LOGICAL_WIDTH, layout.renderHeight / LOGICAL_HEIGHT);
+    paintPickLogical(ctx, state);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return;
   }
 
+  if (isPortraitScreen(pixelWidth, pixelHeight)) {
+    const pl = computePortraitPlayLayout(pixelWidth, pixelHeight);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+    ctx.fillStyle = "#051a11";
+    ctx.fillRect(0, 0, pixelWidth, pixelHeight);
+    const { game, stage } = pl;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(game.x, game.y, game.w, game.h);
+    ctx.clip();
+    ctx.translate(game.x, game.y);
+    ctx.scale(game.w / GAMEPLAY_WIDTH, game.h / LOGICAL_HEIGHT);
+    paintGameplayStrip(ctx, state);
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(stage.x, stage.y, stage.w, stage.h);
+    ctx.clip();
+    ctx.translate(stage.x, stage.y);
+    ctx.scale(stage.w / STAGE_PANEL_WIDTH, stage.h / LOGICAL_HEIGHT);
+    ctx.translate(-GAMEPLAY_WIDTH, 0);
+    paintStageStrip(ctx, state);
+    ctx.restore();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return;
+  }
+
+  const layout = computeLandscapeLayout(pixelWidth, pixelHeight);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, pixelWidth, pixelHeight);
+  ctx.fillStyle = "#051a11";
+  ctx.fillRect(0, 0, pixelWidth, pixelHeight);
+  ctx.translate(layout.offsetX, layout.offsetY);
+  ctx.scale(layout.renderWidth / LOGICAL_WIDTH, layout.renderHeight / LOGICAL_HEIGHT);
+  paintGameplayStrip(ctx, state);
+  paintStageStrip(ctx, state);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 };

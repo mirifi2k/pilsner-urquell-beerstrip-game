@@ -82,6 +82,15 @@ export const pickGirl = (state: GameState, girlId: 1 | 2 | 3): GameState => {
   };
 };
 
+export const setPickHoverGirl = (
+  state: GameState,
+  hovered: 1 | 2 | 3 | null,
+): GameState => {
+  if (state.phase !== "pick") return state;
+  if (hovered === state.hoveredGirl) return state;
+  return { ...state, hoveredGirl: hovered };
+};
+
 export const setPickHoverFromPointer = (
   state: GameState,
   pointerX: number,
