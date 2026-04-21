@@ -15,15 +15,17 @@ import {
 } from "./constants";
 import type { GameState } from "./types";
 
+const baseUrl = import.meta.env.BASE_URL;
+
 const assets = {
-  bg: "/sprites/bg.png",
-  bgStage: "/sprites/bg_stage.png",
-  beer: "/sprites/beer_bottle.png",
-  crate: "/sprites/crate.png",
-  cap: "/sprites/cap.png",
-  girl1: "/sprites/girls/1/girl_1_1.png",
-  girl2: "/sprites/girls/2/girl_2_1.png",
-  girl3: "/sprites/girls/3/girl_3_1.png",
+  bg: `${baseUrl}sprites/bg.png`,
+  bgStage: `${baseUrl}sprites/bg_stage.png`,
+  beer: `${baseUrl}sprites/beer_bottle.png`,
+  crate: `${baseUrl}sprites/crate.png`,
+  cap: `${baseUrl}sprites/cap.png`,
+  girl1: `${baseUrl}sprites/girls/1/girl_1_1.png`,
+  girl2: `${baseUrl}sprites/girls/2/girl_2_1.png`,
+  girl3: `${baseUrl}sprites/girls/3/girl_3_1.png`,
 };
 
 const imageCache = new Map<string, HTMLImageElement>();
@@ -43,7 +45,7 @@ const getGirlStageImage = (
 ): HTMLImageElement | null => {
   if (!selectedGirl) return null;
   const stageNumber = Math.max(1, Math.min(5, stageIndex + 1));
-  const src = `/sprites/girls/${selectedGirl}/girl_${selectedGirl}_${stageNumber}.png`;
+  const src = `${baseUrl}sprites/girls/${selectedGirl}/girl_${selectedGirl}_${stageNumber}.png`;
   return getImage(src);
 };
 
@@ -248,7 +250,7 @@ export const draw = (
   ctx.fillText(`Score: ${state.score}`, 80, hudY);
 
   const glassStage = Math.max(1, Math.min(5, state.level));
-  const glassImage = getImage(`/sprites/glass_${glassStage}.png`);
+  const glassImage = getImage(`${baseUrl}sprites/glass_${glassStage}.png`);
   const glassH = 360;
   const glassY = 148;
   let glassW = 150;
