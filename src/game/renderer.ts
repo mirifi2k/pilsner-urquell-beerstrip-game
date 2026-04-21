@@ -29,6 +29,8 @@ const assets = {
 };
 
 const imageCache = new Map<string, HTMLImageElement>();
+const lastReadyGirlStageByGirl = new Map<1 | 2 | 3, HTMLImageElement>();
+const lastReadyGlassByStage = new Map<number, HTMLImageElement>();
 
 const getImage = (src: string): HTMLImageElement => {
   const cached = imageCache.get(src);
@@ -38,6 +40,9 @@ const getImage = (src: string): HTMLImageElement => {
   imageCache.set(src, img);
   return img;
 };
+
+const isImageReady = (img: HTMLImageElement | null | undefined): img is HTMLImageElement =>
+  Boolean(img && img.complete && img.naturalWidth > 0);
 
 const getGirlStageImage = (
   selectedGirl: 1 | 2 | 3 | null,
@@ -250,15 +255,30 @@ export const draw = (
   ctx.fillText(`Score: ${state.score}`, 80, hudY);
 
   const glassStage = Math.max(1, Math.min(5, state.level));
-  const glassImage = getImage(`${baseUrl}sprites/glass_${glassStage}.png`);
+  const desiredGlassImage = getImage(`${baseUrl}sprites/glass_${glassStage}.png`);
+  if (isImageReady(desiredGlassImage)) {
+    lastReadyGlassByStage.set(glassStage, desiredGlassImage);
+  }
+  let glassImage: HTMLImageElement | null = isImageReady(desiredGlassImage)
+    ? desiredGlassImage
+    : lastReadyGlassByStage.get(glassStage) ?? null;
+  if (!glassImage) {
+    for (let stage = glassStage - 1; stage >= 1; stage -= 1) {
+      const previous = lastReadyGlassByStage.get(stage);
+      if (previous) {
+        glassImage = previous;
+        break;
+      }
+    }
+  }
   const glassH = 360;
   const glassY = 148;
   let glassW = 150;
-  if (glassImage.complete && glassImage.naturalWidth > 0 && glassImage.naturalHeight > 0) {
+  if (isImageReady(glassImage) && glassImage.naturalHeight > 0) {
     glassW = (glassImage.naturalWidth / glassImage.naturalHeight) * glassH;
   }
   const glassX = 80 + (320 - glassW) / 2;
-  if (glassImage.complete && glassImage.naturalWidth > 0) {
+  if (isImageReady(glassImage)) {
     ctx.drawImage(glassImage, glassX, glassY, glassW, glassH);
   } else {
     ctx.fillStyle = "rgba(205, 184, 74, 0.45)";
@@ -335,15 +355,20 @@ export const draw = (
   const girlRectY = 72;
   const girlRectW = stagePanelW - 144;
   const girlRectH = LOGICAL_HEIGHT - 144;
-  const stageGirlImage = getGirlStageImage(
+  const desiredStageGirlImage = getGirlStageImage(
     state.selectedGirl,
     state.stageIndex,
   );
-  if (
-    stageGirlImage &&
-    stageGirlImage.complete &&
-    stageGirlImage.naturalWidth > 0
-  ) {
+  if (state.selectedGirl && isImageReady(desiredStageGirlImage)) {
+    lastReadyGirlStageByGirl.set(state.selectedGirl, desiredStageGirlImage);
+  }
+  const stageGirlImage =
+    state.selectedGirl !== null
+      ? (isImageReady(desiredStageGirlImage)
+          ? desiredStageGirlImage
+          : (lastReadyGirlStageByGirl.get(state.selectedGirl) ?? null))
+      : null;
+  if (isImageReady(stageGirlImage)) {
     const srcW = stageGirlImage.naturalWidth;
     const srcH = stageGirlImage.naturalHeight;
     const fitScale = Math.min(girlRectW / srcW, girlRectH / srcH);
@@ -377,11 +402,7 @@ export const draw = (
   ctx.beginPath();
   ctx.roundRect(girlRectX, girlRectY, girlRectW, girlRectH, 28);
   ctx.stroke();
-  if (
-    !stageGirlImage ||
-    !stageGirlImage.complete ||
-    stageGirlImage.naturalWidth <= 0
-  ) {
+  if (!isImageReady(stageGirlImage)) {
     ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
     ctx.textAlign = "center";
     ctx.font = "700 54px Inter, Arial, sans-serif";
