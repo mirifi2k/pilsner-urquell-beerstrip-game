@@ -41,8 +41,32 @@ const App = () => {
     const getLogicalPoint = (clientX: number, clientY: number) => {
       const rect = canvas.getBoundingClientRect();
       if (!rect.width || !rect.height) return null;
-      const normalizedX = (clientX - rect.left) / rect.width;
-      const normalizedY = (clientY - rect.top) / rect.height;
+      const logicalAspect = LOGICAL_WIDTH / LOGICAL_HEIGHT;
+      const rectAspect = rect.width / rect.height || logicalAspect;
+
+      let renderWidth = rect.width;
+      let renderHeight = rect.height;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      if (rectAspect > logicalAspect) {
+        renderHeight = rect.height;
+        renderWidth = renderHeight * logicalAspect;
+        offsetX = (rect.width - renderWidth) / 2;
+      } else {
+        renderWidth = rect.width;
+        renderHeight = renderWidth / logicalAspect;
+        offsetY = (rect.height - renderHeight) / 2;
+      }
+
+      const xInRender = clientX - rect.left - offsetX;
+      const yInRender = clientY - rect.top - offsetY;
+      if (xInRender < 0 || yInRender < 0 || xInRender > renderWidth || yInRender > renderHeight) {
+        return null;
+      }
+
+      const normalizedX = xInRender / renderWidth;
+      const normalizedY = yInRender / renderHeight;
       const logicalX = normalizedX * LOGICAL_WIDTH;
       const logicalY = normalizedY * LOGICAL_HEIGHT;
       const gameplayX = Math.max(0, Math.min(GAMEPLAY_WIDTH, logicalX));
@@ -78,10 +102,12 @@ const App = () => {
     const onMouseDown = (e: MouseEvent) => pickFromClient(e.clientX, e.clientY);
     const onTouchMove = (e: TouchEvent) => {
       if (e.touches.length < 1) return;
+      e.preventDefault();
       moveFromClientX(e.touches[0].clientX, e.touches[0].clientY);
     };
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length < 1) return;
+      e.preventDefault();
       pickFromClient(e.touches[0].clientX, e.touches[0].clientY);
     };
 
@@ -89,8 +115,8 @@ const App = () => {
     window.addEventListener("resize", onResize);
     canvas.addEventListener("mousemove", onMouseMove);
     canvas.addEventListener("mousedown", onMouseDown);
-    canvas.addEventListener("touchmove", onTouchMove, { passive: true });
-    canvas.addEventListener("touchstart", onTouchStart, { passive: true });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+    canvas.addEventListener("touchstart", onTouchStart, { passive: false });
 
     let running = true;
     let prev = performance.now();

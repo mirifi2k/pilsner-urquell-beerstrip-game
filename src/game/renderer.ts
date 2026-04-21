@@ -78,18 +78,35 @@ export const draw = (
   state: GameState,
 ): void => {
   const dpr = window.devicePixelRatio || 1;
-  const width = canvas.width / dpr;
-  const height = canvas.height / dpr;
-  const scaleX = width / LOGICAL_WIDTH;
-  const scaleY = height / LOGICAL_HEIGHT;
+  const pixelWidth = canvas.width / dpr;
+  const pixelHeight = canvas.height / dpr;
+
+  const targetAspect = LOGICAL_WIDTH / LOGICAL_HEIGHT;
+  const currentAspect = pixelWidth / pixelHeight || targetAspect;
+
+  let renderWidth = pixelWidth;
+  let renderHeight = pixelHeight;
+
+  if (currentAspect > targetAspect) {
+    renderHeight = pixelHeight;
+    renderWidth = renderHeight * targetAspect;
+  } else {
+    renderWidth = pixelWidth;
+    renderHeight = renderWidth / targetAspect;
+  }
+
+  const offsetX = (pixelWidth - renderWidth) / 2;
+  const offsetY = (pixelHeight - renderHeight) / 2;
+  const scale = renderWidth / LOGICAL_WIDTH;
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, width, height);
+  ctx.clearRect(0, 0, pixelWidth, pixelHeight);
 
   ctx.fillStyle = "#051a11";
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, pixelWidth, pixelHeight);
 
-  ctx.scale(scaleX, scaleY);
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(scale, scale);
 
   const bgImage = getImage(assets.bg);
   const bgStageImage = getImage(assets.bgStage);
