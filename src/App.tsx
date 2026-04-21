@@ -16,11 +16,26 @@ const App = () => {
   const stateRef = useRef<GameState>(createInitialState());
   const [phase, setPhase] = useState<GameState["phase"]>(stateRef.current.phase);
   const phaseRef = useRef<GameState["phase"]>(stateRef.current.phase);
+  const lastTotalCaughtRef = useRef<number>(stateRef.current.totalCaught);
+  const lastGlassStageRef = useRef<number>(
+    Math.max(1, Math.min(5, stateRef.current.level)),
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = setupCanvas(canvas);
+    const baseUrl = import.meta.env.BASE_URL;
+    const catchSound = new Audio(`${baseUrl}sounds/catch.mp3`);
+    const fillSound = new Audio(`${baseUrl}sounds/fill.mp3`);
+    catchSound.preload = "auto";
+    fillSound.preload = "auto";
+    const playSound = (audio: HTMLAudioElement) => {
+      audio.currentTime = 0;
+      void audio.play().catch(() => {
+        // Ignore autoplay/user-gesture related rejections.
+      });
+    };
 
     const onResize = () => resizeCanvas(canvas);
     const getLogicalPoint = (clientX: number, clientY: number) => {
@@ -84,6 +99,15 @@ const App = () => {
       const dt = Math.min((now - prev) / 1000, 0.033);
       prev = now;
       stateRef.current = tick(stateRef.current, dt);
+      if (stateRef.current.totalCaught > lastTotalCaughtRef.current) {
+        playSound(catchSound);
+      }
+      lastTotalCaughtRef.current = stateRef.current.totalCaught;
+      const currentGlassStage = Math.max(1, Math.min(5, stateRef.current.level));
+      if (currentGlassStage > lastGlassStageRef.current) {
+        playSound(fillSound);
+      }
+      lastGlassStageRef.current = currentGlassStage;
       if (stateRef.current.phase !== phaseRef.current) {
         phaseRef.current = stateRef.current.phase;
         setPhase(stateRef.current.phase);
@@ -112,6 +136,11 @@ const App = () => {
           <button
             onClick={() => {
               stateRef.current = resetGame();
+              lastTotalCaughtRef.current = stateRef.current.totalCaught;
+              lastGlassStageRef.current = Math.max(
+                1,
+                Math.min(5, stateRef.current.level),
+              );
               phaseRef.current = "pick";
               setPhase("pick");
             }}
